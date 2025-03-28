@@ -1,54 +1,53 @@
 #include <WiFiManager.h>
 #include <Arduino.h>
-
 #include <ArduinoJson.h>
 #include <MD5Builder.h>
 #include <EEPROM.h>
 #include <Preferences.h>
-#include <PubSubClient.h>
 #include <iostream>
 #include <string>
+#include <PubSubClient.h>
 
 #ifdef ESP32
-#include <WiFiClient.h>
-#include <esp_wifi.h>
-#include <Update.h>
-#include <WebServer.h>
-#include <HTTPClient.h>
-#include <HTTPUpdate.h>
-#include <WiFi.h>  // ไลบรารี WiFi สำหรับ ESP32
-#include <WiFiClientSecure.h>
-#define LED_PIN 25
-#define RELAY_PIN 26
-#define BUTTON_PIN 13
-#define BUZZER_PIN 33
-#define LED_ON HIGH
-#define LED_OFF LOW
-#define RELAY_ON HIGH
-#define RELAY_OFF LOW
-#define BUTTON_ON HIGH
-#define BUTTON_OFF LOW
-#define BUZZER_ON LOW
-#define BUZZER_OFF HIGH
+  #include <WiFiClient.h>
+  #include <esp_wifi.h>
+  #include <Update.h>
+  #include <WebServer.h>
+  #include <HTTPClient.h>
+  #include <HTTPUpdate.h>
+  #include <WiFi.h>  // ไลบรารี WiFi สำหรับ ESP32
+  #include <WiFiClientSecure.h>
+  #define LED_PIN 25
+  #define RELAY_PIN 26
+  #define BUTTON_PIN 13
+  #define BUZZER_PIN 33
+  #define LED_ON HIGH
+  #define LED_OFF LOW
+  #define RELAY_ON HIGH
+  #define RELAY_OFF LOW
+  #define BUTTON_ON HIGH
+  #define BUTTON_OFF LOW
+  #define BUZZER_ON LOW
+  #define BUZZER_OFF HIGH
 #elif defined(ESP8266)
-#include <WiFiClientSecureBearSSL.h>
-#include <WiFiClient.h>
-#include <ESP8266WiFi.h>  // ไลบรารี WiFi สำหรับ ESP8266
-#include <WiFiClientSecure.h>
-#include <ESP8266httpUpdate.h>
-#include <ESP8266HTTPClient.h>
-#define LED_PIN 13
-#define RELAY_PIN 12
-#define BUTTON_PIN 3
-#define BUZZER_PIN 1  // TX Pin ของ ESP8266
-#define LED_ON HIGH
-#define LED_OFF LOW
-#define RELAY_ON HIGH
-#define RELAY_OFF LOW
-#define BUTTON_ON LOW
-#define BUTTON_OFF HIGH
-#define BUZZER_ON LOW
-#define BUZZER_OFF HIGH
+  #include <WiFiClientSecureBearSSL.h>
+  #include <WiFiClient.h>
+  #include <ESP8266WiFi.h>  // ไลบรารี WiFi สำหรับ ESP8266
+  #include <WiFiClientSecure.h>
+  #include <ESP8266httpUpdate.h>
+  #include <ESP8266HTTPClient.h>
+  #define LED_PIN 13
+  #define RELAY_PIN 12
+  #define BUTTON_PIN 3
+  #define BUZZER_PIN 1  // TX Pin ของ ESP8266
+  #define LED_ON HIGH
+  #define LED_OFF LOW
+  #define RELAY_ON HIGH
+  #define RELAY_OFF LOW
+  #define BUTTON_ON LOW
+  #define BUTTON_OFF HIGH
+  #define BUZZER_ON LOW
+  #define BUZZER_OFF HIGH
 
 #endif
 
@@ -114,14 +113,18 @@ void LedOn();
 void LedOff();
 void generateDeviceId();
 void ConfigWifi();
-void postStateUpdate();
 void getDeviceState();
 void registerNewDevie();
+void playSuccessTone();
+void upgradeFirmware(String url);
+void playConfigTone();
+void playErrorTone();
+void postStateUpdate(bool btnState);
+void postStateUpdateToApi(bool btnState);
 
-
-enum { unPress,
-       shortPress,
-       longPress } btnPress;
+  enum { unPress,
+         shortPress,
+         longPress } btnPress;
 
 enum { Offline,
        Online,
@@ -147,73 +150,11 @@ WiFiClient espClient;
 PubSubClient client(espClient);
 
 
-// ฟังก์ชันที่เรียกเมื่อมีข้อความใหม่จาก MQTT
-void callback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Message received: ");
-  Serial.println(topic);
 
-  String message;
-  for (unsigned int i = 0; i < length; i++) {
-    message += (char)payload[i];
-  }
-
-  Serial.print("Payload: ");
-  Serial.println(message);
-
-  // แปลงเป็น JSON Object
-  StaticJsonDocument<200> doc;
-  DeserializationError error = deserializeJson(doc, message);
-
-  if (error) {
-    Serial.print("JSON parse failed: ");
-    Serial.println(error.c_str());
-    return;
-  }
-
-  // อ่านค่าจาก JSON
-  const char* relay = doc["relayState"];  // รับค่าจาก JSON เช่น {"relay": "ON"}
-
-  if (relay) {
-
-    if (strcmp(relay, "ON") == 0) {
-      digitalWrite(RELAY_PIN, RELAY_ON);
-      ButtonState = true;
-      Serial.println("relay : ON");
-      digitalWrite(LED_PIN, LED_ON);
-    } else if (strcmp(relay, "OFF") == 0) {
-      ButtonState = false;
-      Serial.println("relay : OFF");
-      digitalWrite(RELAY_PIN, RELAY_OFF);
-      digitalWrite(LED_PIN, LED_OFF);
-    }
-
-    Serial.println("relayState : " + String(ButtonState));
-  }
-}
-
-void reconnectMQTT() {
-  while (!client.connected()) {
-    Serial.print("Connecting to MQTT...");
-    //checkButtonPress();
-    //countPress();
-    if (client.connect(clientId, mqtt_user, mqtt_pass, ("schoolId/" + schoolId + "/deviceId/" + deviceId + "/status").c_str(), willQoS, willRetain, willMessage)) {  // ใช้ Username & Password
-                                                                                                                                                                     //if (client.connect("ESP_Device", mqtt_user, mqtt_pass)) {
-      Serial.println("Connected!");
-      client.publish(("schoolId/" + schoolId + "/deviceId/" + deviceId + "/status").c_str(), "online", willRetain);
-      client.subscribe(("schoolId/" + schoolId + "/deviceId/" + deviceId + "/relay").c_str());  // Subscribe ไปที่ Topic
-      client.subscribe(("schoolId/" + schoolId + "/deviceId/" + deviceId + "/ota").c_str());  // Subscribe ไปที่ ota firmware
-    } else {
-      Serial.print("failed, rc=");
-      Serial.print(client.state());
-      Serial.println(" try again in 5 seconds");
-      delay(5000);
-    }
-  }
-}
 
 String getMacAddress() {
   uint8_t baseMac[6];
-  
+
 #if defined(ESP8266)
   WiFi.macAddress(baseMac);
 #elif defined(ESP32)
@@ -227,51 +168,7 @@ String getMacAddress() {
 
 
 
-void setup() {
-  // put your setup code here, to run once:
-  Serial.begin(115200);
-  Serial.println("Hellow " + String(CURRENT_VERSION));
-  WiFi.mode(WIFI_STA);
-  clientSSL.setInsecure();
-  //WiFi.STA.begin();
 
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
-  pinMode(LED_PIN, OUTPUT);
-  pinMode(RELAY_PIN, OUTPUT);
-  pinMode(BUZZER_PIN, OUTPUT);
-  digitalWrite(BUZZER_PIN, BUZZER_OFF);  // set default buzzer
-  digitalWrite(LED_PIN, LED_OFF);
-
-  startMillis = millis();  // set default start millis for loop by timer_duration
-
-  deviceMode = Online;
-  btnPress = unPress;
-
-  deviceMAC = getMacAddress();
-  Serial.println(deviceMAC);
-  //AP_SSID = "4sPlus-" + deviceMAC.substring(6);  // Use last 6 characters of MAC
-  AP_SSID = "4s+" + deviceMAC;  // Use last 6 characters of MAC
-  generateDeviceId();
-  // ใช้ WiFiManager ตั้งค่า WiFi อัตโนมัติ
-  //setupWiFiManager();
-  if (!wifiManager.autoConnect(AP_SSID.c_str(), "12345678")) {
-    Serial.println("Failed to connect WiFi");
-    ESP.restart();
-  }
-  // get schoolid from server
-  checkFirmwareVersion();
-
-
-  // mqtt connecting
-  client.setServer(mqtt_server, mqtt_port);
-  // callback function for check relay by topic
-  client.setCallback(callback);  // กำหนด callback สำหรับรับข้อความ MQTT
-  // isConnected Wifi
-  // display Led Green
-  LedOn();
-
-  // get
-}
 
 void generateDeviceId() {
   if (deviceMAC.length() > 0) {
@@ -284,51 +181,7 @@ void generateDeviceId() {
 }
 
 
-void loop() {
-  if (!client.connected()) {
-    reconnectMQTT();
-  }
-  client.loop();
-  checkButtonPress();
-  countPress();
-  switch (btnPress) {
-    case shortPress:
-      break;
-    case longPress:
-      deviceMode = Config;
-      break;
-    default:
-      break;
-  }
 
-  switch (deviceMode) {
-    case Online:
-      //Serial.println("online Mode");
-
-      break;
-    case Config:
-      //Serial.println("config Mode");
-      ConfigWifi();
-
-      break;
-    default:
-      //Serial.println("default offline mode");
-
-      break;
-  }
-
-  elapsedMillis = millis() - startMillis;
-  if (elapsedMillis >= timer_duration) {
-    //Serial.println("in read relay state");
-    ReadRelayState();
-    ReadLedState();
-
-    //getDeviceState();
-    startMillis = millis();
-  }
-
-  // read Relay Stae;
-}
 
 void ReadLedState() {
   digitalWrite(LED_PIN, AlarmStep[LedStepState]);
@@ -407,9 +260,6 @@ void ConfigWifi() {
   Serial.println("Long press detected - entering WiFi config mode");
   playConfigTone();
 
-  wifiManager.resetSettings();
-  loadCustomParameters();
-  setupWiFiManager();
 
   if (!wifiManager.startConfigPortal(AP_SSID.c_str())) {
     Serial.println("Failed to connect and hit timeout");
@@ -458,13 +308,13 @@ void getDeviceState() {
     HTTPClient http;
     http.setTimeout(5000);
     String url = String(API_BASE_URL) + "/" + deviceId;
-  #if defined(ESP8266)
-      BearSSL::WiFiClientSecure client2;
-      client2.setInsecure();  // ไม่ใช้ใบรับรอง SSL
-      http.begin(client2, url);
-  #elif defined(ESP32)
-      http.begin(url);
-  #endif
+#if defined(ESP8266)
+    BearSSL::WiFiClientSecure client2;
+    client2.setInsecure();  // ไม่ใช้ใบรับรอง SSL
+    http.begin(client2, url);
+#elif defined(ESP32)
+    http.begin(url);
+#endif
 
 
 
@@ -506,13 +356,13 @@ void postStateUpdate(bool btnState) {
   Serial.println(deviceId);
   HTTPClient http;
   http.setTimeout(5000);
-  #if defined(ESP8266)
-    BearSSL::WiFiClientSecure client2;
-    client2.setInsecure();  // ไม่ใช้ใบรับรอง SSL
-    http.begin(client2, API_MQTT_URL);
-  #elif defined(ESP32)
-    http.begin(API_MQTT_URL);
-  #endif
+#if defined(ESP8266)
+  BearSSL::WiFiClientSecure client2;
+  client2.setInsecure();  // ไม่ใช้ใบรับรอง SSL
+  http.begin(client2, API_MQTT_URL);
+#elif defined(ESP32)
+  http.begin(API_MQTT_URL);
+#endif
 
   http.addHeader("Content-Type", "application/json");
   http.addHeader("Authorization", "Bearer " + String(AUTH_TOKEN));
@@ -564,9 +414,8 @@ void postStateUpdateToApi(bool btnState) {
 
 
   StaticJsonDocument<200> doc;
-  doc["deviceId"] = deviceId;    // Using MD5 hashed MAC address
-  doc["relayState"] = btnState;  //[{deviceId : deviceId, switchState : swState, hookByUserId : "device", hookDate : "", deviceType : "esp32" }];
-                                 //doc["data"] = deviceMAC;
+  doc["deviceId"] = deviceId;   
+  doc["relayState"] = btnState;  
 
   String requestBody;
   serializeJson(doc, requestBody);
@@ -624,7 +473,9 @@ void checkFirmwareVersion() {
     digitalWrite(BUZZER_PIN, BUZZER_OFF);
     delay(1000);
     Serial.println("🚀 Registering new device...");
-    registerNewDevice();  // ✅ แก้ไขสะกดผิดจาก registerNewDevie()
+
+    //registerNewDevice();  // ✅ แก้ไขสะกดผิดจาก registerNewDevie()
+
   } else if (httpResponseCode == 202) {
     Serial.println("⚠️ Please map device to school.");
   } else if (httpResponseCode > 0) {  // ✅ ป้องกันกรณีที่ responseCode เป็น -1
@@ -639,14 +490,15 @@ void checkFirmwareVersion() {
       Serial.println(httpResponseCode);
       schoolId = String(responseDoc["schoolId"]);
       //Serial.println(schoolId);
-      int newVersion = responseDoc["versionNumber"].as<int>();;  // ✅ แก้ไขชื่อเป็น newVersion
+      int newVersion = responseDoc["versionNumber"].as<int>();
+      ;  // ✅ แก้ไขชื่อเป็น newVersion
       String firmwareUrl = responseDoc["firmwareUrl"];
       Serial.println(newVersion);
       Serial.println(firmwareUrl);
 
       if (newVersion > CURRENT_VERSION) {
-         Serial.println("🔄 Updating Firmware...");
-         upgradeFirmware(firmwareUrl);  // ✅ แก้ไขสะกดผิดจาก upgreadFirmware()
+        Serial.println("🔄 Updating Firmware...");
+        upgradeFirmware(firmwareUrl);  // ✅ แก้ไขสะกดผิดจาก upgreadFirmware()
       }
     } else {
       Serial.println("❌ JSON Parsing Failed!");
@@ -683,18 +535,14 @@ void registerNewDevice() {
 
 
   StaticJsonDocument<200> doc;
-  doc["deviceid"] = deviceId;    // Using MD5 hashed MAC address
-  doc["modelID"] = MODEL_ID;     //[{deviceId : deviceId, switchState : swState, hookByUserId : "device", hookDate : "", deviceType : "esp32" }];
-  doc["deviceMac"] = deviceMAC;  //doc["data"] = deviceMAC;
+  doc["deviceid"] = deviceId;
+  doc["modelID"] = MODEL_ID;
+  doc["deviceMac"] = deviceMAC;
   doc["relayState"] = "OFF";
 
   String requestBody;
   serializeJson(doc, requestBody);
   Serial.println(requestBody);
-
-  // String payload = "{\"deviceId\":\" + String(\"860cf7b8fcb5d42b129e624ab300856\") + \"," + \"relayState\":\" + String(relayState ? "true" : "false") + \"}";
-  // Serial.println("Sending POST request...");
-  // Serial.println("Payload: " + payload);
 
   int httpResponseCode = http.POST(requestBody);
   if (httpResponseCode > 0) {
@@ -709,30 +557,201 @@ void registerNewDevice() {
 
   http.end();
 }
-
 void upgradeFirmware(String url) {
   //
   Serial.println("Starting OTA Update...");
-    Serial.println("Downloading: " + url);
+  Serial.println("Downloading: " + url);
+  playConfigTone();
+  // ทำการอัปเดต OTA ผ่าน HTTP
+  t_httpUpdate_return ret = httpUpdate.update(clientSSL, url);
 
-    // ทำการอัปเดต OTA ผ่าน HTTP
-    t_httpUpdate_return ret = httpUpdate.update(clientSSL, url);
+  switch (ret) {
+    case HTTP_UPDATE_FAILED:
+      Serial.printf("HTTP_UPDATE_FAILED Error (%d): %s\n",
+                    httpUpdate.getLastError(),
+                    httpUpdate.getLastErrorString().c_str());
+      break;
 
-    switch (ret) {
-        case HTTP_UPDATE_FAILED:
-            Serial.printf("HTTP_UPDATE_FAILED Error (%d): %s\n",
-                          httpUpdate.getLastError(),
-                          httpUpdate.getLastErrorString().c_str());
-            break;
+    case HTTP_UPDATE_NO_UPDATES:
+      Serial.println("HTTP_UPDATE_NO_UPDATES");
+      break;
 
-        case HTTP_UPDATE_NO_UPDATES:
-            Serial.println("HTTP_UPDATE_NO_UPDATES");
-            break;
+    case HTTP_UPDATE_OK:
+      Serial.println("HTTP_UPDATE_OK");
+      Serial.println("Firmware update successful, restarting...");
+      ESP.restart();  // รีบูตอุปกรณ์หลังอัปเดตสำเร็จ
+      break;
+  }
+}
 
-        case HTTP_UPDATE_OK:
-            Serial.println("HTTP_UPDATE_OK");
-            Serial.println("Firmware update successful, restarting...");
-            ESP.restart();  // รีบูตอุปกรณ์หลังอัปเดตสำเร็จ
-            break;
+// ฟังก์ชันที่เรียกเมื่อมีข้อความใหม่จาก MQTT
+void callback(char* topic, byte* payload, unsigned int length) {
+  Serial.print("Message received: ");
+  Serial.println(topic);
+
+  String message;
+  for (unsigned int i = 0; i < length; i++) {
+    message += (char)payload[i];
+  }
+
+  Serial.print("Payload: ");
+  Serial.println(message);
+
+  // แปลงเป็น JSON Object
+  StaticJsonDocument<200> doc;
+  DeserializationError error = deserializeJson(doc, message);
+
+  if (error) {
+    Serial.print("JSON parse failed: ");
+    Serial.println(error.c_str());
+    return;
+  }
+
+  // ตรวจสอบว่าเป็น topic ของ relay หรือ ota
+  String topicStr = String(topic);
+
+  if (topicStr.endsWith("/relay")) {
+    // อ่านค่าจาก JSON สำหรับ relay
+    const char* relay = doc["relayState"];
+
+    if (relay) {
+      if (strcmp(relay, "ON") == 0) {
+        digitalWrite(RELAY_PIN, RELAY_ON);
+        ButtonState = true;
+        Serial.println("relay : ON");
+        //digitalWrite(LED_PIN, LED_ON);
+      } else if (strcmp(relay, "OFF") == 0) {
+        ButtonState = false;
+        Serial.println("relay : OFF");
+        digitalWrite(RELAY_PIN, RELAY_OFF);
+        //digitalWrite(LED_PIN, LED_OFF);
+      }
+      Serial.println("relayState : " + String(ButtonState));
     }
+  } else if (topicStr.endsWith("/ota")) {
+    // ทำงานสำหรับ OTA
+    String firmwareUrl = doc["url"];
+
+    if (firmwareUrl) {
+      Serial.println("Received OTA update request.");
+      Serial.print("Firmware URL: ");
+      Serial.println(firmwareUrl);
+
+      // เรียกฟังก์ชันอัปเดต OTA (ต้องมีการเขียนแยก)
+      upgradeFirmware(firmwareUrl);
+    }
+  }
+}
+
+
+void reconnectMQTT() {
+  while (!client.connected()) {
+    Serial.print("Connecting to MQTT...");
+    //checkButtonPress();
+    //countPress();
+    if (client.connect(clientId, mqtt_user, mqtt_pass, ("schoolId/" + schoolId + "/deviceId/" + deviceId + "/status").c_str(), willQoS, willRetain, willMessage)) {  // ใช้ Username & Password
+                                                                                                                                                                     //if (client.connect("ESP_Device", mqtt_user, mqtt_pass)) {
+      Serial.println("Connected!");
+      client.publish(("schoolId/" + schoolId + "/deviceId/" + deviceId + "/status").c_str(), "online", willRetain);
+      client.subscribe(("schoolId/" + schoolId + "/deviceId/" + deviceId + "/relay").c_str());  // Subscribe ไปที่ Topic
+      client.subscribe(("schoolId/" + schoolId + "/deviceId/" + deviceId + "/ota").c_str());    // Subscribe ไปที่ ota firmware
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+      delay(5000);
+    }
+  }
+}
+
+void setup() {
+  // put your setup code here, to run once:
+  Serial.begin(115200);
+  Serial.println("Hellow " + String(CURRENT_VERSION));
+  WiFi.mode(WIFI_STA);
+  clientSSL.setInsecure();
+  //WiFi.STA.begin();
+
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(RELAY_PIN, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, BUZZER_OFF);  // set default buzzer
+  digitalWrite(LED_PIN, LED_OFF);
+
+  startMillis = millis();  // set default start millis for loop by timer_duration
+
+  deviceMode = Online;
+  btnPress = unPress;
+
+  deviceMAC = getMacAddress();
+  Serial.println(deviceMAC);
+  //AP_SSID = "4sPlus-" + deviceMAC.substring(6);  // Use last 6 characters of MAC
+  AP_SSID = "4s+" + deviceMAC;  // Use last 6 characters of MAC
+  generateDeviceId();
+  // ใช้ WiFiManager ตั้งค่า WiFi อัตโนมัติ
+  //setupWiFiManager();
+  if (!wifiManager.autoConnect(AP_SSID.c_str(), "12345678")) {
+    Serial.println("Failed to connect WiFi");
+    ESP.restart();
+  }
+  // get schoolid from server
+  checkFirmwareVersion();
+
+
+  // mqtt connecting
+  client.setServer(mqtt_server, mqtt_port);
+  // callback function for check relay by topic
+  client.setCallback(callback);  // กำหนด callback สำหรับรับข้อความ MQTT
+  // isConnected Wifi
+  // display Led Green
+  LedOn();
+
+  // get
+}
+
+void loop() {
+  if (!client.connected()) {
+    reconnectMQTT();
+  }
+  client.loop();
+  checkButtonPress();
+  countPress();
+  // switch (btnPress) {
+  //   case shortPress:
+  //     break;
+  //   case longPress:
+  //     deviceMode = Config;
+  //     break;
+  //   default:
+  //     break;
+  // }
+
+  // switch (deviceMode) {
+  //   case Online:
+  //     //Serial.println("online Mode");
+
+  //     break;
+  //   case Config:
+  //     //Serial.println("config Mode");
+  //     ConfigWifi();
+
+  //     break;
+  //   default:
+  //     //Serial.println("default offline mode");
+
+  //     break;
+  // }
+
+  elapsedMillis = millis() - startMillis;
+  if (elapsedMillis >= timer_duration) {
+    //Serial.println("in read relay state");
+    ReadRelayState();
+    ReadLedState();
+
+    //getDeviceState();
+    startMillis = millis();
+  }
+
+  // read Relay Stae;
 }
