@@ -196,21 +196,10 @@ void reconnectMQTT() {
     Serial.print("Connecting to MQTT...");
     //checkButtonPress();
     //countPress();
-    //String willTopic = "schoolId/" + String(schoolId) + "/" + String(deviceId) + "/status";
-    //client.connect(clientId, mqtt_user, mqtt_password, willTopic, 0, true, "offline");
-    // if (client.connect("ESP_Device", mqtt_user, mqtt_pass)) {  // ใช้ Username & Password
-    //willTopic = ("schoolId/" + schoolId + "/deviceId/" + deviceId + "/status").c_str();
     if (client.connect(clientId, mqtt_user, mqtt_pass, ("schoolId/" + schoolId + "/deviceId/" + deviceId + "/status").c_str(), willQoS, willRetain, willMessage)) {  // ใช้ Username & Password
                                                                                                                                                                      //if (client.connect("ESP_Device", mqtt_user, mqtt_pass)) {
       Serial.println("Connected!");
-      //client.subscribe(mqtt_topic);  // Subscribe ไปที่ Topic
-      //mqtt_topic =  deviceId;
-      //client.setWill("schoolId/" + String(schoolId) + "/" + String(deviceId) + "/status", "Offline", true, 1);
-      //String topic = deviceId + "/status/";
-      //lient.publish("schoolId/" + String(schoolId) + "/" + String(deviceId) + "/status", "Online", true);
       client.publish(("schoolId/" + schoolId + "/deviceId/" + deviceId + "/status").c_str(), "online", willRetain);
-      //sprintf(mqtt_topic, "schoolId/%s/deviceId/%s/relay", schoolId, deviceId);
-      //client.subscribe("schoolId/1033530296/deviceId/0b77732f62d87fbe9f717edeac2de738/relay");  // Subscribe ไปที่ Topic
       client.subscribe(("schoolId/" + schoolId + "/deviceId/" + deviceId + "/relay").c_str());  // Subscribe ไปที่ Topic
       client.subscribe(("schoolId/" + schoolId + "/deviceId/" + deviceId + "/ota").c_str());  // Subscribe ไปที่ ota firmware
     } else {
@@ -224,10 +213,7 @@ void reconnectMQTT() {
 
 String getMacAddress() {
   uint8_t baseMac[6];
-  //char macStr[18];
-  // Get MAC address for WiFi station
-  // esp_err_t ret = esp_wifi_get_mac(WIFI_IF_STA, baseMac);
-
+  
 #if defined(ESP8266)
   WiFi.macAddress(baseMac);
 #elif defined(ESP32)
@@ -237,57 +223,8 @@ String getMacAddress() {
   char baseMacChr[18] = { 0 };
   sprintf(baseMacChr, "%02X%02X%02X%02X%02X%02X", baseMac[0], baseMac[1], baseMac[2], baseMac[3], baseMac[4], baseMac[5]);
   return String(baseMacChr);
-  // } else {
-  //   Serial.println("Failed to read MAC address");
-  //   return "";
-  // }
 }
 
-void saveCustomParameters() {
-  preferences.begin("deviceConfig", false);
-  preferences.putString("tokenId", String(tokenId));
-  preferences.end();
-}
-
-void loadCustomParameters() {
-  preferences.begin("deviceConfig", true);
-  String savedTokenId = preferences.getString("tokenId", "");
-
-  strlcpy(tokenId, savedTokenId.c_str(), sizeof(tokenId));
-
-  preferences.end();
-}
-
-void setupWiFiManager() {
-
-
-  //WiFiManagerParameter custom_school_id("schoolId", "School ID", schoolId, 32);
-  WiFiManagerParameter custom_token_id("tokenId", "Token ID", tokenId, 64);
-
-
-  //Set config save notify callback
-  wifiManager.setSaveConfigCallback([&]() {
-    Serial.println("Should save config");
-    strcpy(tokenId, custom_token_id.getValue());
-    saveCustomParameters();
-  });
-
-  // Add parameters to WiFiManager
-  //wifiManager.addParameter(&custom_school_id);
-  wifiManager.addParameter(&custom_token_id);
-
-
-  // Set custom menu items
-  std::vector<const char*> menu = { "wifi", "info", "param", "sep", "restart", "exit" };
-  wifiManager.setMenu(menu);
-
-  // Set timeout
-  wifiManager.setConfigPortalTimeout(180);
-
-  // Custom HTML
-  const char* custom_html = "<div><h2>4S Plus Wifi Setting</h2></div>";
-  wifiManager.setCustomHeadElement(custom_html);
-}
 
 
 void setup() {
@@ -315,21 +252,6 @@ void setup() {
   //AP_SSID = "4sPlus-" + deviceMAC.substring(6);  // Use last 6 characters of MAC
   AP_SSID = "4s+" + deviceMAC;  // Use last 6 characters of MAC
   generateDeviceId();
-  // if (wifiManager.autoConnect(AP_SSID.c_str())) {
-  //   Serial.println("connectd wifi");
-  //   deviceMode = Offline;
-  //   LedOn();
-  // }
-  // unsigned long pressTime = 0;
-  //   while (digitalRead(BUTTON_PIN) == BUTTON_ON) {
-  //       if (millis() - pressTime > 10000) {
-  //           Serial.println("Entering WiFi Config Mode...");
-  //           wifiManager.resetSettings(); // ล้างค่า WiFi
-  //           break;
-  //       }
-  //       delay(100);
-  //   }
-
   // ใช้ WiFiManager ตั้งค่า WiFi อัตโนมัติ
   //setupWiFiManager();
   if (!wifiManager.autoConnect(AP_SSID.c_str(), "12345678")) {
@@ -369,43 +291,13 @@ void loop() {
   client.loop();
   checkButtonPress();
   countPress();
-
-
-  // put your main code here, to run repeatedly:
-  // while (Serial.available()) {             // วนรับค่าหากด้วย while loop ถ้าหาก Serial.available() (ถ้า Serial ถูกใช้งาน)
-  //   Ex_String_Read = Serial.readString();  // ใช้คำสั้ง Serial.readString() สำหรับเก็บค่า String ไว้ในตัวแปร Ex_String_Read
-  //   Ex_String_Read.trim();
-  //   if (Ex_String_Read.substring(0) == "Offline") {
-  //     deviceMode = Offline;
-  //     ButtonState = false;
-  //   } else if (Ex_String_Read.substring(0) == "Online") {
-  //     deviceMode = Online;
-  //     ButtonState = true;
-  //   } else if (Ex_String_Read.substring(0) == "Config") {
-  //     deviceMode = Config;
-  //   } else {
-  //   }
-  // }
-
-
-
   switch (btnPress) {
     case shortPress:
-      //Serial.println("short press Mode");
-      //Serial.println("button state = " + String(ButtonState));
-      //delay(1000);
       break;
     case longPress:
-      //Serial.println("long press Mode");
       deviceMode = Config;
-      //BuzzerOn();
-      //delay(100);
-      //BuzzerOff();
-      //delay(1000);
       break;
     default:
-      //Serial.println("default unpress mode");
-      //delay(1000);
       break;
   }
 
@@ -424,10 +316,6 @@ void loop() {
 
       break;
   }
-  // Serial.print("Ex_String_Read = ");
-  // Serial.println(IsPressing);  // แสดงผลออกทาง Serial
-  // Serial.println("deviceMode = " + String(deviceMode));
-  //}
 
   elapsedMillis = millis() - startMillis;
   if (elapsedMillis >= timer_duration) {
@@ -683,10 +571,6 @@ void postStateUpdateToApi(bool btnState) {
   String requestBody;
   serializeJson(doc, requestBody);
   Serial.println(requestBody);
-
-  // String payload = "{\"deviceId\":\" + String(\"860cf7b8fcb5d42b129e624ab300856\") + \"," + \"relayState\":\" + String(relayState ? "true" : "false") + \"}";
-  // Serial.println("Sending POST request...");
-  // Serial.println("Payload: " + payload);
 
   int httpResponseCode = http.POST(requestBody);
   if (httpResponseCode > 0) {
