@@ -653,7 +653,7 @@ void reconnectMQTT() {
                                                                                                                                                                      //if (client.connect("ESP_Device", mqtt_user, mqtt_pass)) {
       Serial.println("Connected!");
       client.publish(("schoolId/" + schoolId + "/deviceId/" + deviceId + "/status").c_str(), "online", willRetain);
-      client.subscribe(("schoolId/" + schoolId + "/deviceId/" + deviceId + "/relay").c_str());  // Subscribe ไปที่ Topic
+      client.subscribe(("schoolId/" + schoolId + "/deviceId/+/relay").c_str());  // Subscribe ไปที่ Topic
       client.subscribe(("schoolId/" + schoolId + "/deviceId/" + deviceId + "/ota").c_str());    // Subscribe ไปที่ ota firmware
     } else {
       Serial.print("failed, rc=");
