@@ -11,7 +11,7 @@
 #define LED_PIN 1
 #define RELAY_PIN 12
 #define BUTTON_PIN 3
-#define BUZZER_PIN 5  // TX Pin ของ ESP8266
+//#define BUZZER_PIN 5  // TX Pin ของ ESP8266
 
 // กำหนดสถานะ
 #define LED_ON LOW
@@ -56,7 +56,7 @@ int loopcount = 0;
 // ตัวแปรสถานะ
 bool IsPressing = false;
 bool ButtonState = false;
-int AlarmStep[7] = { 1, 0, 1, 0, 1, 0 };
+int AlarmStep[6] = { 1, 0, 1, 0, 1, 0 };
 int AlarmStepState = 0;
 int LedStep[2] = { 0, 1 };
 int LedStepState = 1;
@@ -181,24 +181,20 @@ void clearSchoolId() {
  * รีเซ็ตการตั้งค่า WiFi และรีสตาร์ท
  */
 void ResetWifi() {
-  // wifiManager.resetSettings();
-  // delay(1000);
-  // WiFi.disconnect(true); 
-  clearSchoolId();
-  // Serial.println("Reset Wifi Success");
-  // ESP.restart();
-  yield();
+
+  // ล้างค่า WiFi ทั้งหมด (SSID, Password)
+  wifiManager.resetSettings();
+  delay(100);
+
+  // คุณอาจต้องการล้างค่า Config ของคุณเอง (เช่น schoolId) ถ้ามี
+  //clearSchoolId();
   
-  // ล้างการตั้งค่า WiFi ด้วยการใช้ WiFi.disconnect แทน
-  WiFi.disconnect(true);
-  Serial.println("ล้างการตั้งค่า WiFi แล้ว");
-  
-  ESP.eraseConfig();
-  Serial.println("ล้างการตั้งค่าทั้งหมดแล้ว");
-  
-  delay(1000);
+  Serial.println("รีเซ็ตการตั้งค่า WiFi แล้ว!");
+
+  delay(100);
   yield();
 
+  // รีสตาร์ทเพื่อเริ่มต้นใหม่
   ESP.restart();
 }
 
@@ -547,9 +543,9 @@ void setup() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   pinMode(LED_PIN, OUTPUT);
   pinMode(RELAY_PIN, OUTPUT);
-  pinMode(BUZZER_PIN, OUTPUT);
+  //pinMode(BUZZER_PIN, OUTPUT);
   digitalWrite(LED_PIN, LED_OFF);
-  digitalWrite(BUZZER_PIN, BUZZER_OFF);
+  //digitalWrite(BUZZER_PIN, BUZZER_OFF);
   digitalWrite(RELAY_PIN, RELAY_OFF);
 
   // เริ่มต้นตัวจับเวลา

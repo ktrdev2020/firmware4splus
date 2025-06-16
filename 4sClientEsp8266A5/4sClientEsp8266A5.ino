@@ -3,15 +3,15 @@
 #include <ArduinoJson.h>
 #include <MD5Builder.h>
 #include <PubSubClient.h>
-#include <ESP8266WiFi.h>  // ใช้สำหรับ ESP8266
+#include <ESP8266WiFi.h> // ใช้สำหรับ ESP8266
 #include <ESP8266httpUpdate.h>
 #include <Preferences.h>
 
 // กำหนดขาที่ใช้งาน
-#define LED_PIN 1 // red color = 15, blue = 13
+#define LED_PIN 13 // red color = 15, blue = 13
 #define RELAY_PIN 12
-#define BUTTON_PIN 3 // rx,tx = 3, 0 = flash, default buton
-//#define BUZZER_PIN 1  // TX Pin ของ ESP8266
+#define BUTTON_PIN 0 // rx,tx = 3, 0 = flash, default buton
+#define BUZZER_PIN 1 // TX Pin ของ ESP8266
 
 // กำหนดสถานะ
 #define LED_ON HIGH
@@ -24,26 +24,26 @@
 #define BUZZER_OFF HIGH
 
 // ตั้งค่า MQTT
-const char* mqtt_server = "mqtt.ssk3.go.th";  // ใส่ IP ของ Windows Server
-const int mqtt_port = 1883;                   // MQTT Port
-const char* mqtt_user = "ssk3";               // Username MQTT
-const char* mqtt_pass = "33030000";           // Password MQTT
-char* mqtt_topic;                             // Topic ที่ใช้ Subscribe & Publish
+const char *mqtt_server = "mqtt.ssk3.go.th"; // ใส่ IP ของ Windows Server
+const int mqtt_port = 1883;                  // MQTT Port
+const char *mqtt_user = "ssk3";              // Username MQTT
+const char *mqtt_pass = "33030000";          // Password MQTT
+char *mqtt_topic;                            // Topic ที่ใช้ Subscribe & Publish
 
 // ตั้งค่าอุปกรณ์
-String AP_SSID;                 // จะถูกตั้งค่าแบบไดนามิก
-const int MODEL_ID = 1;         // 1 = sonoffbasic 2 = esp32 3 = esp32(12ch) รหัสรุ่นอุปกรณ์
-const int CURRENT_VERSION = 1;  // เวอร์ชันเฟิร์มแวร์ปัจจุบัน
+String AP_SSID;                // จะถูกตั้งค่าแบบไดนามิก
+const int MODEL_ID = 1;        // 1 = sonoffbasic 2 = esp32 3 = esp32(12ch) รหัสรุ่นอุปกรณ์
+const int CURRENT_VERSION = 1; // เวอร์ชันเฟิร์มแวร์ปัจจุบัน
 const int firmwareID = 1;
-const char* AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkZXZpY2VUeXBlIjoiNHNkZXZpY2UiLCJ1c2VybmFtZSI6ImRldnNzazMiLCJleHAiOjE3MzkzNTEzOTEsImlzcyI6ImFpLnNzazMuZ28udGgiLCJhdWQiOiJhaS5zc2szLmdvLnRoIn0.yF74XH5Mo9FWg9i2LUFTn-ztRHYxI1YbfqfORUpnGu0";
-const char* API_BASE_URL = "https://api.4splus.ssk3.go.th/api/v1/splus";
-const char* API_MQTT_URL = "https://api.4splus.ssk3.go.th/api/v1/mqtt";
-const char* SCHOOL_BASE_URL = "https://api.4splus.ssk3.go.th/api/v1/splus/getSchoolId";
+const char *AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkZXZpY2VUeXBlIjoiNHNkZXZpY2UiLCJ1c2VybmFtZSI6ImRldnNzazMiLCJleHAiOjE3MzkzNTEzOTEsImlzcyI6ImFpLnNzazMuZ28udGgiLCJhdWQiOiJhaS5zc2szLmdvLnRoIn0.yF74XH5Mo9FWg9i2LUFTn-ztRHYxI1YbfqfORUpnGu0";
+const char *API_BASE_URL = "https://api.4splus.ssk3.go.th/api/v1/splus";
+const char *API_MQTT_URL = "https://api.4splus.ssk3.go.th/api/v1/mqtt";
+const char *SCHOOL_BASE_URL = "https://api.4splus.ssk3.go.th/api/v1/splus/getSchoolId";
 
 // ตั้งค่า Last Will and Testament (LWT)
-char* willTopic;
+char *willTopic;
 String willMessageStr = String("{\"statusState\":\"OFFLINE\",\"version\":\"") + CURRENT_VERSION + "\"}";
-const char* willMessage = willMessageStr.c_str();
+const char *willMessage = willMessageStr.c_str();
 const int willQoS = 0;
 const bool willRetain = true;
 
@@ -56,25 +56,23 @@ int loopcount = 0;
 // ตัวแปรสถานะ
 bool IsPressing = false;
 bool ButtonState = false;
-int AlarmStep[2] = { 1, 0 };
+int AlarmStep[7] = {1, 0, 1, 0, 1, 0};
 int AlarmStepState = 0;
-int LedStep[2] = { 0, 1 };
+int LedStep[2] = {0, 1};
 int LedStepState = 1;
-
 
 // ตัวแปรระบุตัวตนอุปกรณ์
 String deviceMAC = "";
 String deviceId = "";
 String schoolId = "";
-//int schoolId = 0;
-// วัตถุนำมาใช้งาน
+// int schoolId = 0;
+//  วัตถุนำมาใช้งาน
 WiFiManager wifiManager;
 Preferences preferences;
-//WiFiClientSecure ClientSSL;
-WiFiClient espClient;            // ใช้ WiFiClient แทน WiFiClientSecure สำหรับพอร์ต 1883
-PubSubClient client(espClient);  // ตั้งค่า PubSubClient ใช้ espClient
+// WiFiClientSecure ClientSSL;
+WiFiClient espClient;           // ใช้ WiFiClient แทน WiFiClientSecure สำหรับพอร์ต 1883
+PubSubClient client(espClient); // ตั้งค่า PubSubClient ใช้ espClient
 std::unique_ptr<BearSSL::WiFiClientSecure> clientSSL(new BearSSL::WiFiClientSecure);
-
 
 // ประกาศฟังก์ชัน
 void checkButtonPress();
@@ -91,17 +89,18 @@ void LoadSchoolID();
 void clearSchoolId();
 void ResetWifi();
 void reconnectMQTT();
-void callback(char* topic, byte* payload, unsigned int length);
+void callback(char *topic, byte *payload, unsigned int length);
 String getMacAddress();
 
 /**
  * ดึง MAC Address ของอุปกรณ์
  */
-String getMacAddress() {
+String getMacAddress()
+{
   uint8_t baseMac[6];
   WiFi.macAddress(baseMac);
 
-  char baseMacChr[18] = { 0 };
+  char baseMacChr[18] = {0};
   sprintf(baseMacChr, "%02X%02X%02X%02X%02X%02X", baseMac[0], baseMac[1], baseMac[2], baseMac[3], baseMac[4], baseMac[5]);
   return String(baseMacChr);
 }
@@ -109,8 +108,10 @@ String getMacAddress() {
 /**
  * สร้าง device ID จาก MD5 hash ของ MAC address
  */
-void generateDeviceId() {
-  if (deviceMAC.length() > 0) {
+void generateDeviceId()
+{
+  if (deviceMAC.length() > 0)
+  {
     MD5Builder md5;
     md5.begin();
     md5.add(deviceMAC);
@@ -122,21 +123,27 @@ void generateDeviceId() {
 /**
  * ควบคุมสถานะ LED ตามขั้นตอน
  */
-void ReadLedState() {
+void ReadLedState()
+{
   digitalWrite(LED_PIN, LED_ON);
 }
 
 /**
  * ควบคุมสถานะรีเลย์ตามสถานะปุ่ม
  */
-void ReadRelayState() {
-  if (ButtonState) {
-    if (AlarmStepState == 2) {
+void ReadRelayState()
+{
+  if (ButtonState)
+  {
+    if (AlarmStepState == 6)
+    {
       AlarmStepState = 0;
     }
     digitalWrite(RELAY_PIN, AlarmStep[AlarmStepState] == 1 ? RELAY_ON : RELAY_OFF);
     AlarmStepState++;
-  } else {
+  }
+  else
+  {
     digitalWrite(RELAY_PIN, RELAY_OFF);
     AlarmStepState = 0;
   }
@@ -145,10 +152,14 @@ void ReadRelayState() {
 /**
  * ตรวจสอบว่าปุ่มถูกกดหรือไม่
  */
-void checkButtonPress() {
-  if (digitalRead(BUTTON_PIN) == BUTTON_ON) {
+void checkButtonPress()
+{
+  if (digitalRead(BUTTON_PIN) == BUTTON_ON)
+  {
     IsPressing = true;
-  } else {
+  }
+  else
+  {
     IsPressing = false;
   }
 }
@@ -156,46 +167,50 @@ void checkButtonPress() {
 /**
  * เปิด LED
  */
-void LedOn() {
+void LedOn()
+{
   digitalWrite(LED_PIN, LED_ON);
 }
 
 /**
  * ปิด LED
  */
-void LedOff() {
+void LedOff()
+{
   digitalWrite(LED_PIN, LED_OFF);
 }
 
 /**
  * ล้างค่า school ID จาก preferences
  */
-void clearSchoolId() {
-  preferences.begin("config", false);  // เปิด Preferences ในโหมด Read/Write
-  preferences.remove("schoolId");      // ลบค่า schoolId
-  preferences.end();                   // ปิด Preferences
-  //Serial.println("schoolId ถูกล้างเรียบร้อยแล้ว");
+void clearSchoolId()
+{
+  preferences.begin("config", false); // เปิด Preferences ในโหมด Read/Write
+  preferences.remove("schoolId");     // ลบค่า schoolId
+  preferences.end();                  // ปิด Preferences
+  // Serial.println("schoolId ถูกล้างเรียบร้อยแล้ว");
 }
 
 /**
  * รีเซ็ตการตั้งค่า WiFi และรีสตาร์ท
  */
-void ResetWifi() {
+void ResetWifi()
+{
   // wifiManager.resetSettings();
   // delay(1000);
-  // WiFi.disconnect(true); 
+  // WiFi.disconnect(true);
   clearSchoolId();
   // Serial.println("Reset Wifi Success");
   // ESP.restart();
   yield();
-  
+
   // ล้างการตั้งค่า WiFi ด้วยการใช้ WiFi.disconnect แทน
   WiFi.disconnect(true);
   Serial.println("ล้างการตั้งค่า WiFi แล้ว");
-  
+
   ESP.eraseConfig();
   Serial.println("ล้างการตั้งค่าทั้งหมดแล้ว");
-  
+
   delay(1000);
   yield();
 
@@ -205,18 +220,23 @@ void ResetWifi() {
 /**
  * จัดการกับการกดปุ่มและกำหนดประเภทการกด
  */
-void countPress() {
-  if (IsPressing) {
+void countPress()
+{
+  if (IsPressing)
+  {
     IsPressing = false;
     long startTime = millis();
     long maxPress = 5000;
     long minPress = 100;
     long chkTime = 0;
 
-    while (digitalRead(BUTTON_PIN) == BUTTON_ON) {
+    while (digitalRead(BUTTON_PIN) == BUTTON_ON)
+    {
       chkTime = millis() - startTime;
-      if (chkTime >= maxPress) {
-        for (int i = 0; i < 5; i++) {
+      if (chkTime >= maxPress)
+      {
+        for (int i = 0; i < 5; i++)
+        {
           digitalWrite(LED_PIN, LED_ON);
           delay(200);
           digitalWrite(LED_PIN, LED_OFF);
@@ -227,21 +247,26 @@ void countPress() {
       delay(100);
     }
 
-    if (chkTime >= maxPress) {
-      //btnPress = longPress;
-      
+    if (chkTime >= maxPress)
+    {
+      // btnPress = longPress;
+
       ButtonState = false;
       chkTime = 0;
-      //Serial.println("in Long press");
+      // Serial.println("in Long press");
       ResetWifi();
-    } else if (chkTime <= maxPress && chkTime >= minPress) {
-      //btnPress = shortPress;
+    }
+    else if (chkTime <= maxPress && chkTime >= minPress)
+    {
+      // btnPress = shortPress;
       ButtonState = !ButtonState;
       chkTime = 0;
       digitalWrite(RELAY_PIN, ButtonState ? RELAY_ON : RELAY_OFF);
       postStateUpdateToApi(ButtonState);
-    } else {
-      //btnPress = unPress;
+    }
+    else
+    {
+      // btnPress = unPress;
     }
   }
 
@@ -251,9 +276,11 @@ void countPress() {
 /**
  * ส่งสถานะอัพเดตไปยัง API
  */
-void postStateUpdateToApi(bool btnState) {
-  if (WiFi.status() != WL_CONNECTED) {
-    //Serial.println("WiFi ไม่ได้เชื่อมต่อ!");
+void postStateUpdateToApi(bool btnState)
+{
+  if (WiFi.status() != WL_CONNECTED)
+  {
+    // Serial.println("WiFi ไม่ได้เชื่อมต่อ!");
     return;
   }
 
@@ -270,20 +297,23 @@ void postStateUpdateToApi(bool btnState) {
   doc["relayState"] = btnState;
   doc["userName"] = "esp8266";
   doc["mac"] = deviceMAC;
-  //doc["firmwareID"] = firmwareID;
+  // doc["firmwareID"] = firmwareID;
 
   String requestBody;
   serializeJson(doc, requestBody);
   ////Serial.println(requestBody);
 
   int httpResponseCode = http.POST(requestBody);
-  if (httpResponseCode > 0) {
-    //Serial.print("รหัสการตอบกลับ: ");
-    //Serial.println(httpResponseCode);
-    //Serial.println("การตอบกลับ: " + http.getString());
-  } else {
-    //Serial.print("ข้อผิดพลาด: ");
-    //Serial.println(http.errorToString(httpResponseCode));
+  if (httpResponseCode > 0)
+  {
+    // Serial.print("รหัสการตอบกลับ: ");
+    // Serial.println(httpResponseCode);
+    // Serial.println("การตอบกลับ: " + http.getString());
+  }
+  else
+  {
+    // Serial.print("ข้อผิดพลาด: ");
+    // Serial.println(http.errorToString(httpResponseCode));
   }
 
   http.end();
@@ -292,9 +322,11 @@ void postStateUpdateToApi(bool btnState) {
 /**
  * ดึง school ID จาก API
  */
-void getSchoolID() {
-  if (WiFi.status() != WL_CONNECTED) {
-    //Serial.println("WiFi ไม่ได้เชื่อมต่อ!");
+void getSchoolID()
+{
+  if (WiFi.status() != WL_CONNECTED)
+  {
+    // Serial.println("WiFi ไม่ได้เชื่อมต่อ!");
     return;
   }
 
@@ -302,16 +334,16 @@ void getSchoolID() {
   // std::unique_ptr<BearSSL::WiFiClientSecure> client2(new BearSSL::WiFiClientSecure);
   // client2->setInsecure();  // ข้ามการตรวจสอบ SSL certificate
   http.begin(*clientSSL, SCHOOL_BASE_URL);
-  http.setTimeout(5000);  // ตั้งเวลา Timeout
+  http.setTimeout(5000); // ตั้งเวลา Timeout
 
   http.addHeader("Content-Type", "application/json");
   http.addHeader("Authorization", "Bearer " + String(AUTH_TOKEN));
 
   StaticJsonDocument<128> doc;
-  doc["deviceId"] = deviceId;      // MD5 ของ MAC Address
-  doc["modelID"] = MODEL_ID;       // Model ID สำหรับ 4s
-  doc["mac"] = deviceMAC;          // mac address
-  doc["firmwareID"] = firmwareID;  // Model ID สำหรับ 4s
+  doc["deviceId"] = deviceId;     // MD5 ของ MAC Address
+  doc["modelID"] = MODEL_ID;      // Model ID สำหรับ 4s
+  doc["mac"] = deviceMAC;         // mac address
+  doc["firmwareID"] = firmwareID; // Model ID สำหรับ 4s
 
   String requestBody;
   serializeJson(doc, requestBody);
@@ -319,23 +351,29 @@ void getSchoolID() {
 
   int httpResponseCode = http.POST(requestBody);
 
-  if (httpResponseCode > 0) {
+  if (httpResponseCode > 0)
+  {
     String response = http.getString();
     Serial.println("📩 การตอบกลับ: " + response);
 
     StaticJsonDocument<64> responseDoc;
     DeserializationError error = deserializeJson(responseDoc, response);
 
-    if (!error) {
-      //Serial.print("✅ รหัสการตอบกลับ: ");
-      //Serial.println(httpResponseCode);
+    if (!error)
+    {
+      // Serial.print("✅ รหัสการตอบกลับ: ");
+      // Serial.println(httpResponseCode);
       schoolId = String(responseDoc["schoolId"]);
       Serial.println(schoolId);
-    } else {
-      //Serial.println("❌ การแยกวิเคราะห์ JSON ล้มเหลว!");
     }
-  } else {
-    //Serial.print("❌ ข้อผิดพลาด HTTP: ");
+    else
+    {
+      // Serial.println("❌ การแยกวิเคราะห์ JSON ล้มเหลว!");
+    }
+  }
+  else
+  {
+    // Serial.print("❌ ข้อผิดพลาด HTTP: ");
     Serial.println(http.errorToString(httpResponseCode));
   }
 
@@ -345,30 +383,37 @@ void getSchoolID() {
 /**
  * โหลดหรือดึง school ID
  */
-void LoadSchoolID() {
+void LoadSchoolID()
+{
   preferences.begin("config", false);
   // อ่านค่า schoolId จาก Preferences
   schoolId = preferences.getString("schoolId", "");
 
-  if (schoolId == "") {
-    //Serial.println("ไม่พบ schoolId กำลังดึงจาก API...");
-    getSchoolID();  // เรียก API เพื่อดึง schoolId
+  if (schoolId == "")
+  {
+    // Serial.println("ไม่พบ schoolId กำลังดึงจาก API...");
+    getSchoolID(); // เรียก API เพื่อดึง schoolId
 
-    if (schoolId != "") {
-      preferences.putString("schoolId", schoolId);  // บันทึกลง Preferences
-      //Serial.println("บันทึก schoolId: " + schoolId);
+    if (schoolId != "")
+    {
+      preferences.putString("schoolId", schoolId); // บันทึกลง Preferences
+      // Serial.println("บันทึก schoolId: " + schoolId);
       preferences.end();
 
-      //Serial.println("กำลังรีสตาร์ท ESP...");
+      // Serial.println("กำลังรีสตาร์ท ESP...");
       delay(2000);
-      ESP.restart();  // รีสตาร์ทเพื่อให้ค่าใหม่ถูกใช้
-    } else {
-      //Serial.println("การดึง schoolId จาก API ล้มเหลว!");
-       delay(2000);
-      ESP.restart();  // รีสตาร์ทเพื่อให้ค่าใหม่ถูกใช้
+      ESP.restart(); // รีสตาร์ทเพื่อให้ค่าใหม่ถูกใช้
     }
-  } else {
-    //Serial.println("โหลด schoolId จาก Preferences: " + schoolId);
+    else
+    {
+      // Serial.println("การดึง schoolId จาก API ล้มเหลว!");
+      delay(2000);
+      ESP.restart(); // รีสตาร์ทเพื่อให้ค่าใหม่ถูกใช้
+    }
+  }
+  else
+  {
+    // Serial.println("โหลด schoolId จาก Preferences: " + schoolId);
   }
 
   preferences.end();
@@ -377,12 +422,14 @@ void LoadSchoolID() {
 /**
  * อัพเกรดเฟิร์มแวร์จาก URL
  */
-void upgradeFirmware(String url) {
+void upgradeFirmware(String url)
+{
   Serial.println("กำลังเริ่มการอัพเดต OTA...");
   Serial.println("กำลังดาวน์โหลด: " + url);
 
-  //กระพริบ LED เพื่อแสดงว่ากำลังอัพเดตเฟิร์มแวร์
-  for (int i = 0; i < 5; i++) {
+  // กระพริบ LED เพื่อแสดงว่ากำลังอัพเดตเฟิร์มแวร์
+  for (int i = 0; i < 5; i++)
+  {
     digitalWrite(LED_PIN, LED_ON);
     delay(200);
     digitalWrite(LED_PIN, LED_OFF);
@@ -391,103 +438,122 @@ void upgradeFirmware(String url) {
 
   delay(1000);
 
-  //อัพเดตเฟิร์มแวร์ผ่าน HTTP
- 
+  // อัพเดตเฟิร์มแวร์ผ่าน HTTP
+
   t_httpUpdate_return ret = ESPhttpUpdate.update(*clientSSL, url);
 
-  switch (ret) {
-    case HTTP_UPDATE_FAILED:
-      Serial.printf("HTTP_UPDATE_FAILED ข้อผิดพลาด (%d): %s\n",
-                    ESPhttpUpdate.getLastError(),
-                    ESPhttpUpdate.getLastErrorString().c_str());
-      break;
+  switch (ret)
+  {
+  case HTTP_UPDATE_FAILED:
+    Serial.printf("HTTP_UPDATE_FAILED ข้อผิดพลาด (%d): %s\n",
+                  ESPhttpUpdate.getLastError(),
+                  ESPhttpUpdate.getLastErrorString().c_str());
+    break;
 
-    case HTTP_UPDATE_NO_UPDATES:
-      Serial.println("HTTP_UPDATE_NO_UPDATES");
-      break;
+  case HTTP_UPDATE_NO_UPDATES:
+    Serial.println("HTTP_UPDATE_NO_UPDATES");
+    break;
 
-    case HTTP_UPDATE_OK:
-      Serial.println("HTTP_UPDATE_OK");
-      Serial.println("การอัพเดตเฟิร์มแวร์สำเร็จ กำลังรีสตาร์ท...");
-      ESP.restart();  // รีบูตอุปกรณ์หลังอัปเดตสำเร็จ
-      break;
+  case HTTP_UPDATE_OK:
+    Serial.println("HTTP_UPDATE_OK");
+    Serial.println("การอัพเดตเฟิร์มแวร์สำเร็จ กำลังรีสตาร์ท...");
+    ESP.restart(); // รีบูตอุปกรณ์หลังอัปเดตสำเร็จ
+    break;
   }
 }
 
 /**
  * ฟังก์ชันเรียกกลับข้อความ MQTT
  */
-void callback(char* topic, byte* payload, unsigned int length) {
+void callback(char *topic, byte *payload, unsigned int length)
+{
   Serial.print("ได้รับข้อความ: ");
   Serial.println(topic);
 
   String message;
-  for (unsigned int i = 0; i < length; i++) {
+  for (unsigned int i = 0; i < length; i++)
+  {
     message += (char)payload[i];
   }
 
-  //Serial.print("เนื้อหา: ");
-  //Serial.println(message);
+  // Serial.print("เนื้อหา: ");
+  // Serial.println(message);
 
   // แปลงเป็น JSON Object
   StaticJsonDocument<64> doc;
   DeserializationError error = deserializeJson(doc, message);
 
-  if (error) {
-    //Serial.print("การแยกวิเคราะห์ JSON ล้มเหลว: ");
-    //Serial.println(error.c_str());
+  if (error)
+  {
+    // Serial.print("การแยกวิเคราะห์ JSON ล้มเหลว: ");
+    // Serial.println(error.c_str());
     return;
   }
 
   // ตรวจสอบว่าเป็น topic ของ relay หรือ ota
   String topicStr = String(topic);
 
-  if (topicStr.endsWith("/relay")) {
+  if (topicStr.endsWith("/relay"))
+  {
     // ประมวลผลคำสั่งรีเลย์
-    const char* relay = doc["relayState"];
+    const char *relay = doc["relayState"];
 
-    if (relay) {
-      if (strcmp(relay, "ON") == 0) {
+    if (relay)
+    {
+      if (strcmp(relay, "ON") == 0)
+      {
         digitalWrite(RELAY_PIN, RELAY_ON);
         ButtonState = true;
-        //Serial.println("รีเลย์ : เปิด");
-      } else if (strcmp(relay, "OFF") == 0) {
+        // Serial.println("รีเลย์ : เปิด");
+      }
+      else if (strcmp(relay, "OFF") == 0)
+      {
         ButtonState = false;
-        //Serial.println("รีเลย์ : ปิด");
+        // Serial.println("รีเลย์ : ปิด");
         digitalWrite(RELAY_PIN, RELAY_OFF);
       }
-      //Serial.println("สถานะรีเลย์ : " + String(ButtonState));
+      // Serial.println("สถานะรีเลย์ : " + String(ButtonState));
     }
-  } else if (topicStr.endsWith("/ota")) {
+  }
+  else if (topicStr.endsWith("/ota"))
+  {
     // ประมวลผลการอัพเดต OTA
     String firmwareUrl = doc["url"];
 
-    if (firmwareUrl) {
-      //Serial.println("ได้รับคำขออัพเดต OTA");
-      //Serial.print("URL เฟิร์มแวร์: ");
-      //Serial.println(firmwareUrl);
+    if (firmwareUrl)
+    {
+      // Serial.println("ได้รับคำขออัพเดต OTA");
+      // Serial.print("URL เฟิร์มแวร์: ");
+      // Serial.println(firmwareUrl);
       upgradeFirmware(firmwareUrl);
     }
-  } else if (topicStr.endsWith("/reset")) {
+  }
+  else if (topicStr.endsWith("/reset"))
+  {
     // ประมวลผลคำสั่งรีเซ็ต
     String Pass = doc["pass"];
-    //Serial.println(Pass);
+    // Serial.println(Pass);
 
-    if (Pass) {
-      if (Pass == "33030000") {
-        //Serial.println("รหัสผ่านแอดมิน");
-        //Serial.println("ตั้งค่า wifi และข้อมูล");
+    if (Pass)
+    {
+      if (Pass == "33030000")
+      {
+        // Serial.println("รหัสผ่านแอดมิน");
+        // Serial.println("ตั้งค่า wifi และข้อมูล");
         ResetWifi();
       }
     }
-  } else if (topicStr.endsWith("/config")) {
+  }
+  else if (topicStr.endsWith("/config"))
+  {
     // ประมวลผลคำสั่งตั้งค่า
     String Pass = doc["pass"];
-    //Serial.println(Pass);
+    // Serial.println(Pass);
 
-    if (Pass == "33030000") {
-      //Serial.println("รหัสผ่านแอดมิน");
-      //Serial.println("กำลังตั้งค่า schoolID ใหม่");
+    if (Pass == "33030000")
+    {
+      // Serial.println("รหัสผ่านแอดมิน");
+      // Serial.println("กำลังตั้งค่า schoolID ใหม่");
       clearSchoolId();
       LoadSchoolID();
     }
@@ -497,32 +563,37 @@ void callback(char* topic, byte* payload, unsigned int length) {
 /**
  * เชื่อมต่อกับเซิร์ฟเวอร์ MQTT
  */
-void reconnectMQTT() {
-  while (!client.connected()) {
-    //Serial.print("กำลังเชื่อมต่อกับ MQTT...");
+void reconnectMQTT()
+{
+  while (!client.connected())
+  {
+    // Serial.print("กำลังเชื่อมต่อกับ MQTT...");
     checkButtonPress();
     countPress();
 
     if (client.connect(deviceId.c_str(), mqtt_user, mqtt_pass,
                        ("schoolId/" + schoolId + "/deviceId/" + deviceId + "/status").c_str(),
-                       willQoS, willRetain, willMessage)) {
+                       willQoS, willRetain, willMessage))
+    {
       Serial.println("เชื่อมต่อสำเร็จ!");
 
       // ประกาศสถานะออนไลน์
       String willMessageStrOnline = String("{\"statusState\":\"ONLINE\",\"version\":\"") + CURRENT_VERSION + "\"}";
-      const char* willMessageOnline = willMessageStrOnline.c_str();
+      const char *willMessageOnline = willMessageStrOnline.c_str();
       client.publish(("schoolId/" + schoolId + "/deviceId/" + deviceId + "/status").c_str(),
                      willMessageOnline, willRetain);
 
       // สมัครสมาชิกหัวข้ออุปกรณ์
       client.subscribe(("schoolId/" + schoolId + "/deviceId/+/relay").c_str());
-      client.subscribe(("schoolId/" + schoolId + "/deviceId/" + deviceId +  "/ota").c_str());
-      client.subscribe(("schoolId/" + schoolId + "/deviceId/" + deviceId +  "/reset").c_str());
-      client.subscribe(("schoolId/" + schoolId + "/deviceId/" + deviceId +  "/config").c_str());
-    } else {
-      //Serial.print("ล้มเหลว, rc=");
-      //Serial.print(client.state());
-      //Serial.println(" ลองอีกครั้งใน 5 วินาที");
+      client.subscribe(("schoolId/" + schoolId + "/deviceId/" + deviceId + "/ota").c_str());
+      client.subscribe(("schoolId/" + schoolId + "/deviceId/" + deviceId + "/reset").c_str());
+      client.subscribe(("schoolId/" + schoolId + "/deviceId/" + deviceId + "/config").c_str());
+    }
+    else
+    {
+      // Serial.print("ล้มเหลว, rc=");
+      // Serial.print(client.state());
+      // Serial.println(" ลองอีกครั้งใน 5 วินาที");
       delay(5000);
     }
   }
@@ -531,8 +602,10 @@ void reconnectMQTT() {
 /**
  * ฟังก์ชัน setup
  */
-void setup() {
+void setup()
+{
   Serial.begin(115200);
+
   delay(5000);
 
   Serial.println("4sPLUS เวอร์ชัน  " + String(CURRENT_VERSION));
@@ -540,15 +613,15 @@ void setup() {
   // ตั้งค่า WiFi
   WiFi.mode(WIFI_STA);
   clientSSL->setInsecure();
-  //ClientSSL.setInsecure();
+  // ClientSSL.setInsecure();
 
   // ตั้งค่าขา
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   pinMode(LED_PIN, OUTPUT);
   pinMode(RELAY_PIN, OUTPUT);
-  //pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
   digitalWrite(LED_PIN, LED_OFF);
-  //digitalWrite(BUZZER_PIN, BUZZER_OFF);
+  digitalWrite(BUZZER_PIN, BUZZER_OFF);
   digitalWrite(RELAY_PIN, RELAY_OFF);
 
   // เริ่มต้นตัวจับเวลา
@@ -556,15 +629,16 @@ void setup() {
 
   // รับข้อมูลระบุตัวตนอุปกรณ์
   deviceMAC = getMacAddress();
-  
+
   AP_SSID = "4s+" + deviceMAC;
   generateDeviceId();
   Serial.println(deviceMAC + " : " + deviceId);
   // ตั้งค่า WiFi Manager
-  wifiManager.setConfigPortalTimeout(90);  // หมดเวลา 90 วินาที
+  wifiManager.setConfigPortalTimeout(90); // หมดเวลา 90 วินาที
 
-  if (!wifiManager.autoConnect(AP_SSID.c_str(), "12345678")) {
-    //Serial.println("การเชื่อมต่อ WiFi ล้มเหลว");
+  if (!wifiManager.autoConnect(AP_SSID.c_str(), "12345678"))
+  {
+    // Serial.println("การเชื่อมต่อ WiFi ล้มเหลว");
     ESP.restart();
   }
 
@@ -582,20 +656,26 @@ void setup() {
 /**
  * ลูปหลัก
  */
-void loop() {
+void loop()
+{
   checkButtonPress();
 
-  if (IsPressing) {
+  if (IsPressing)
+  {
     countPress();
-  } else {
-    if (!client.connected()) {
+  }
+  else
+  {
+    if (!client.connected())
+    {
       reconnectMQTT();
     }
 
     client.loop();
 
     elapsedMillis = millis() - startMillis;
-    if (elapsedMillis >= timer_duration) {
+    if (elapsedMillis >= timer_duration)
+    {
       ReadRelayState();
       ReadLedState();
       startMillis = millis();
