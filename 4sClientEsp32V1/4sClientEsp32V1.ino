@@ -662,6 +662,14 @@ void callback(char* topic, byte* payload, unsigned int length) {
       ResetWifi(); // เรียกฟังก์ชันรีเซ็ต WiFi
     }
   }
+  else if (topicStr.endsWith("/config")) {
+    // จัดการคำสั่งรีเซ็ตการตั้งค่า WiFi
+    String Pass = doc["pass"];
+
+    if (Pass == "33030000") {
+      ResetWifi(); // เรียกฟังก์ชันรีเซ็ต WiFi
+    }
+  }
 }
 
 /**

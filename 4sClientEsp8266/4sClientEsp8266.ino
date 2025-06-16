@@ -186,11 +186,18 @@ void ResetWifi() {
   delay(100);
 
   // คุณอาจต้องการล้างค่า Config ของคุณเอง (เช่น schoolId) ถ้ามี
-  //clearSchoolId();
+  clearSchoolId();
   
   Serial.println("รีเซ็ตการตั้งค่า WiFi แล้ว!");
 
   delay(100);
+  yield();
+  WiFi.disconnect(true);
+  Serial.println("ล้างการตั้งค่า WiFi แล้ว");
+  
+  ESP.eraseConfig();
+  Serial.println("ล้างการตั้งค่าทั้งหมดแล้ว");
+  delay(1000);
   yield();
 
   // รีสตาร์ทเพื่อเริ่มต้นใหม่
